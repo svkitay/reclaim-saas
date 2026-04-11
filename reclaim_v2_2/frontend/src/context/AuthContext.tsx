@@ -8,6 +8,9 @@ interface User {
   role: string;
   sender_name?: string;
   sender_email?: string;
+  sender_email_verified?: boolean;
+  store_website?: string;
+  store_phone?: string;
   has_brevo: boolean;
   has_twilio: boolean;
   has_anthropic: boolean;

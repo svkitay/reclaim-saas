@@ -56,6 +56,10 @@ export const api = {
   // Settings
   updateSettings: (data: any) =>
     request("/settings", { method: "PUT", body: JSON.stringify(data) }),
+  confirmSenderVerified: () =>
+    request("/settings/confirm-sender-verified", { method: "POST" }),
+  resendSenderVerification: () =>
+    request("/settings/verify-sender", { method: "POST" }),
 
   // Customers
   getCustomers: () => request("/customers"),

@@ -43,6 +43,7 @@ class RetailerProfile(BaseModel):
     role: str
     sender_name: Optional[str]
     sender_email: Optional[str]
+    sender_email_verified: Optional[bool] = False
     store_website: Optional[str]
     store_phone: Optional[str]
     has_brevo: bool

@@ -16,7 +16,11 @@ def send_email(
     Falls back to platform key if retailer hasn't configured their own.
     """
     api_key = retailer.brevo_api_key or os.getenv("BREVO_API_KEY", "")
-    from_email = retailer.sender_email or os.getenv("BREVO_SENDER_EMAIL", "noreply@reclaim.furniture")
+    # Only use retailer's sender email if it has been verified in Brevo
+    if retailer.sender_email and getattr(retailer, 'sender_email_verified', False):
+        from_email = retailer.sender_email
+    else:
+        from_email = os.getenv("BREVO_SENDER_EMAIL", "noreply@reclaim.furniture")
     from_name = retailer.sender_name or retailer.store_name
 
     if not api_key:

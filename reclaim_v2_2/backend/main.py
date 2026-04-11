@@ -123,6 +123,7 @@ def get_me(current: models.Retailer = Depends(auth.get_current_retailer), db: Se
         role=current.role,
         sender_name=current.sender_name,
         sender_email=current.sender_email,
+        sender_email_verified=bool(current.sender_email_verified),
         store_website=current.store_website,
         store_phone=current.store_phone,
         has_brevo=bool(current.brevo_api_key),
@@ -142,11 +143,140 @@ def update_settings(
     current: models.Retailer = Depends(auth.get_current_retailer),
     db: Session = Depends(get_db),
 ):
-    for field, value in data.dict(exclude_none=True).items():
+    old_sender_email = current.sender_email
+    update_data = data.dict(exclude_none=True)
+    # If sender_email is changing, reset verification and trigger Brevo verification
+    new_sender_email = update_data.get("sender_email")
+    if new_sender_email and new_sender_email != old_sender_email:
+        update_data["sender_email_verified"] = False
+        # Trigger Brevo sender verification using platform API key
+        _trigger_brevo_sender_verification(
+            email=new_sender_email,
+            name=update_data.get("sender_name") or current.sender_name or current.store_name,
+        )
+    for field, value in update_data.items():
         setattr(current, field, value)
     db.commit()
     db.refresh(current)
     return get_me(current, db)
+
+
+def _trigger_brevo_sender_verification(email: str, name: str) -> None:
+    """Add email as a sender in the platform Brevo account and trigger verification email."""
+    import requests as _req
+    api_key = os.getenv("BREVO_API_KEY", "")
+    if not api_key:
+        print("No platform BREVO_API_KEY set — skipping sender verification")
+        return
+    # First check if sender already exists
+    try:
+        resp = _req.get(
+            "https://api.brevo.com/v3/senders",
+            headers={"api-key": api_key, "accept": "application/json"},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            existing = [s["email"] for s in resp.json().get("senders", [])]
+            if email in existing:
+                print(f"Sender {email} already exists in Brevo")
+                return
+    except Exception as e:
+        print(f"Error checking Brevo senders: {e}")
+    # Create sender — Brevo will send a verification email automatically
+    try:
+        resp = _req.post(
+            "https://api.brevo.com/v3/senders",
+            headers={
+                "api-key": api_key,
+                "accept": "application/json",
+                "content-type": "application/json",
+            },
+            json={"name": name, "email": email},
+            timeout=10,
+        )
+        if resp.status_code in (200, 201):
+            print(f"Brevo sender verification email sent to {email}")
+        else:
+            print(f"Brevo sender creation error {resp.status_code}: {resp.text}")
+    except Exception as e:
+        print(f"Error creating Brevo sender: {e}")
+
+
+# ─── SENDER VERIFICATION ────────────────────────────────────────────────────────
+
+@app.post("/api/settings/verify-sender")
+def resend_sender_verification(
+    current: models.Retailer = Depends(auth.get_current_retailer),
+    db: Session = Depends(get_db),
+):
+    """Resend the Brevo sender verification email for the retailer's current sender_email."""
+    if not current.sender_email:
+        raise HTTPException(status_code=400, detail="No sender email configured")
+    _trigger_brevo_sender_verification(
+        email=current.sender_email,
+        name=current.sender_name or current.store_name,
+    )
+    return {"message": f"Verification email sent to {current.sender_email}"}
+
+
+@app.post("/api/webhooks/brevo-sender-verified")
+def brevo_sender_verified_webhook(
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    """
+    Called by Brevo when a sender email is verified.
+    Finds the retailer with that sender_email and marks it as verified.
+    Note: Brevo does not natively support webhooks for sender verification,
+    so this endpoint can also be called manually or via a polling job.
+    """
+    email = payload.get("email", "")
+    if not email:
+        return {"message": "No email in payload"}
+    retailer = db.query(models.Retailer).filter(
+        models.Retailer.sender_email == email
+    ).first()
+    if retailer:
+        retailer.sender_email_verified = True
+        db.commit()
+        return {"message": f"Sender {email} marked as verified"}
+    return {"message": f"No retailer found with sender_email {email}"}
+
+
+@app.post("/api/settings/confirm-sender-verified")
+def confirm_sender_verified(
+    current: models.Retailer = Depends(auth.get_current_retailer),
+    db: Session = Depends(get_db),
+):
+    """
+    Called by the frontend after the retailer confirms they clicked the Brevo verification link.
+    Checks Brevo to confirm the sender is actually active, then marks it verified.
+    """
+    if not current.sender_email:
+        raise HTTPException(status_code=400, detail="No sender email configured")
+    import requests as _req
+    api_key = os.getenv("BREVO_API_KEY", "")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Platform Brevo API key not configured")
+    try:
+        resp = _req.get(
+            "https://api.brevo.com/v3/senders",
+            headers={"api-key": api_key, "accept": "application/json"},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            senders = resp.json().get("senders", [])
+            for s in senders:
+                if s["email"] == current.sender_email and s.get("active"):
+                    current.sender_email_verified = True
+                    db.commit()
+                    db.refresh(current)
+                    return {"verified": True, "message": f"{current.sender_email} is verified and active"}
+            return {"verified": False, "message": "Sender not yet verified in Brevo — please click the verification link in your email"}
+        else:
+            raise HTTPException(status_code=500, detail="Could not check Brevo sender status")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ─── CUSTOMERS ────────────────────────────────────────────────────────────────

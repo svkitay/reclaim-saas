@@ -37,6 +37,7 @@ class Retailer(Base):
     # Store branding & sender info
     sender_name = Column(String(100), nullable=True)       # e.g. "Ashley Furniture"
     sender_email = Column(String(200), nullable=True)      # e.g. "hello@ashleyfurniture.com"
+    sender_email_verified = Column(Boolean, default=False)  # True once Brevo has verified the sender
     store_logo_url = Column(String(500), nullable=True)
     store_website = Column(String(300), nullable=True)
     store_phone = Column(String(50), nullable=True)
