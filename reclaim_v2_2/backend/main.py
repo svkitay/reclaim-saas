@@ -387,6 +387,39 @@ async def upload_customers(
     return {"imported": imported, "skipped": skipped, "errors": errors[:10]}
 
 
+@app.post("/api/customers", response_model=schemas.CustomerResponse)
+def add_customer(
+    data: schemas.CustomerCreate,
+    current: models.Retailer = Depends(auth.get_current_retailer),
+    db: Session = Depends(get_db),
+):
+    """Manually add a single customer."""
+    purchase_date = None
+    for fmt in ["%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%m-%d-%Y"]:
+        try:
+            purchase_date = datetime.strptime(data.purchase_date, fmt).replace(tzinfo=timezone.utc)
+            break
+        except ValueError:
+            continue
+    if not purchase_date:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {data.purchase_date}")
+    customer = models.Customer(
+        retailer_id=current.id,
+        name=data.name,
+        email=data.email,
+        phone=data.phone,
+        item_purchased=data.item_purchased,
+        purchase_date=purchase_date,
+        purchase_amount=data.purchase_amount,
+        campaign_status=models.CampaignStatus.ACTIVE,
+        current_touchpoint=0,
+    )
+    db.add(customer)
+    db.commit()
+    db.refresh(customer)
+    return enrich_customer(customer)
+
+
 @app.delete("/api/customers/{customer_id}")
 def delete_customer(
     customer_id: int,

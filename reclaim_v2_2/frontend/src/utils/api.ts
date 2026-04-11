@@ -85,4 +85,5 @@ export const api = {
   adminCustomers: () => request("/admin/customers"),
   adminLogs: () => request("/admin/logs"),
   adminToggleRetailer: (id: number) => request(`/admin/retailers/${id}/toggle`, { method: "PUT" }),
+  addCustomer: (data: any) => request("/customers", { method: "POST", body: JSON.stringify(data) }),
 };

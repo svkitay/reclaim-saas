@@ -11,6 +11,15 @@ const TOUCHPOINT_NAMES: Record<number, string> = {
   6: "Win-Back",
 };
 
+const emptyForm = {
+  name: "",
+  email: "",
+  phone: "",
+  item_purchased: "",
+  purchase_date: new Date().toISOString().split("T")[0],
+  purchase_amount: "",
+};
+
 export default function Customers() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +31,12 @@ export default function Customers() {
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<any>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Add Customer modal state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState({ ...emptyForm });
+  const [addLoading, setAddLoading] = useState(false);
+  const [addError, setAddError] = useState("");
 
   const load = () => {
     setLoading(true);
@@ -46,6 +61,29 @@ export default function Customers() {
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const handleAddCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddLoading(true);
+    setAddError("");
+    try {
+      await api.addCustomer({
+        name: addForm.name,
+        email: addForm.email,
+        phone: addForm.phone || undefined,
+        item_purchased: addForm.item_purchased,
+        purchase_date: addForm.purchase_date,
+        purchase_amount: addForm.purchase_amount ? parseFloat(addForm.purchase_amount) : undefined,
+      });
+      setShowAddModal(false);
+      setAddForm({ ...emptyForm });
+      load();
+    } catch (e: any) {
+      setAddError(e.message || "Failed to add customer.");
+    } finally {
+      setAddLoading(false);
     }
   };
 
@@ -119,6 +157,13 @@ export default function Customers() {
           >
             {uploading ? "Importing..." : "Import CSV"}
           </button>
+          <button
+            onClick={() => { setShowAddModal(true); setAddError(""); setAddForm({ ...emptyForm }); }}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors"
+            style={{ background: "#0EA5E9" }}
+          >
+            + Add Customer
+          </button>
         </div>
       </div>
 
@@ -145,7 +190,7 @@ export default function Customers() {
           <div className="p-12 text-center text-slate-400 text-sm">Loading customers...</div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center text-slate-400 text-sm">
-            {search ? "No customers match your search." : "No customers yet. Import a CSV to get started."}
+            {search ? "No customers match your search." : "No customers yet. Import a CSV or add one manually."}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -218,6 +263,111 @@ export default function Customers() {
           </div>
         )}
       </div>
+
+      {/* Add Customer Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+              <h3 className="text-lg font-semibold text-slate-800">Add Customer</h3>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
+            </div>
+            <form onSubmit={handleAddCustomer} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={addForm.name}
+                    onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                    placeholder="John Smith"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Email *</label>
+                  <input
+                    type="email"
+                    required
+                    value={addForm.email}
+                    onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
+                    placeholder="john@example.com"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Item Purchased *</label>
+                <input
+                  type="text"
+                  required
+                  value={addForm.item_purchased}
+                  onChange={(e) => setAddForm({ ...addForm, item_purchased: e.target.value })}
+                  placeholder="e.g. Ashley Furniture Signature Sofa (Gray)"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Purchase Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={addForm.purchase_date}
+                    onChange={(e) => setAddForm({ ...addForm, purchase_date: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Purchase Amount ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={addForm.purchase_amount}
+                    onChange={(e) => setAddForm({ ...addForm, purchase_amount: e.target.value })}
+                    placeholder="1299.00"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Phone (optional)</label>
+                <input
+                  type="tel"
+                  value={addForm.phone}
+                  onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
+                  placeholder="+1 555 000 0000"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+
+              {addError && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{addError}</div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={addLoading}
+                  className="flex-1 py-2.5 rounded-lg text-white text-sm font-medium disabled:opacity-60"
+                  style={{ background: "#0EA5E9" }}
+                >
+                  {addLoading ? "Adding..." : "Add Customer"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Preview Modal */}
       {preview && (
