@@ -5,10 +5,25 @@ export default function AdminRetailers() {
   const [retailers, setRetailers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [toggling, setToggling] = useState<number | null>(null);
 
   useEffect(() => {
     api.adminRetailers().then(setRetailers).finally(() => setLoading(false));
   }, []);
+
+  const handleToggle = async (retailer: any) => {
+    setToggling(retailer.id);
+    try {
+      const result = await api.adminToggleRetailer(retailer.id);
+      setRetailers((prev) =>
+        prev.map((r) => (r.id === retailer.id ? { ...r, is_active: result.is_active } : r))
+      );
+    } catch (err) {
+      alert("Failed to update retailer status.");
+    } finally {
+      setToggling(null);
+    }
+  };
 
   const filtered = retailers.filter((r) =>
     r.store_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -48,6 +63,7 @@ export default function AdminRetailers() {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Integrations</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Joined</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -78,6 +94,25 @@ export default function AdminRetailers() {
                       }`}>
                         {r.is_active ? "Active" : "Inactive"}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {!r.is_super_admin && (
+                        <button
+                          onClick={() => handleToggle(r)}
+                          disabled={toggling === r.id}
+                          className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 ${
+                            r.is_active
+                              ? "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
+                              : "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
+                          }`}
+                        >
+                          {toggling === r.id
+                            ? "Updating..."
+                            : r.is_active
+                            ? "Deactivate"
+                            : "Activate"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

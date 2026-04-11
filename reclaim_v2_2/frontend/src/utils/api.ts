@@ -84,4 +84,5 @@ export const api = {
   adminRetailers: () => request("/admin/retailers"),
   adminCustomers: () => request("/admin/customers"),
   adminLogs: () => request("/admin/logs"),
+  adminToggleRetailer: (id: number) => request(`/admin/retailers/${id}/toggle`, { method: "PUT" }),
 };
