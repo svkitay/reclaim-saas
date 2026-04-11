@@ -51,8 +51,37 @@ def create_super_admin(db: Session):
         print(f"Super admin created: {admin_email}")
 
 
+def run_migrations():
+    """Add any missing columns to existing tables (safe to run on every startup)."""
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        # Get existing columns in retailers table
+        result = conn.execute(text("PRAGMA table_info(retailers)"))
+        existing_cols = {row[1] for row in result.fetchall()}
+        
+        migrations = [
+            ("sender_email_verified", "ALTER TABLE retailers ADD COLUMN sender_email_verified BOOLEAN DEFAULT 0"),
+            ("catalogue_url", "ALTER TABLE retailers ADD COLUMN catalogue_url VARCHAR(500)"),
+            ("catalogue_text", "ALTER TABLE retailers ADD COLUMN catalogue_text TEXT"),
+            ("catalogue_last_scraped", "ALTER TABLE retailers ADD COLUMN catalogue_last_scraped DATETIME"),
+            ("store_website", "ALTER TABLE retailers ADD COLUMN store_website VARCHAR(300)"),
+            ("store_phone", "ALTER TABLE retailers ADD COLUMN store_phone VARCHAR(50)"),
+            ("updated_at", "ALTER TABLE retailers ADD COLUMN updated_at DATETIME"),
+        ]
+        
+        for col_name, sql in migrations:
+            if col_name not in existing_cols:
+                try:
+                    conn.execute(text(sql))
+                    conn.commit()
+                    print(f"Migration: added column {col_name} to retailers")
+                except Exception as e:
+                    print(f"Migration warning for {col_name}: {e}")
+
+
 @app.on_event("startup")
 def startup_event():
+    run_migrations()
     db = next(get_db())
     create_super_admin(db)
     print("Reclaim API v2 started. Database initialized.")
