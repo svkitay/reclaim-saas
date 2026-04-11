@@ -126,15 +126,14 @@ export default function Dashboard() {
         <StatCard label="Open Rate" value={`${analytics?.open_rate ?? 0}%`} icon="👁️" />
       </div>
 
-      {/* Setup Warning */}
+      {/* Setup Warning — only shown when no Brevo key at all (platform or retailer) */}
       {!user?.has_brevo && (
         <div className="mb-6 p-4 rounded-xl border border-amber-200 bg-amber-50 flex items-start gap-3">
           <span className="text-amber-500 text-lg">⚠️</span>
           <div>
             <p className="text-sm font-medium text-amber-800">Running in Demo Mode</p>
             <p className="text-sm text-amber-700 mt-0.5">
-              Messages are being generated and logged, but not actually sent. Add your{" "}
-              <Link to="/settings" className="underline font-medium">Brevo API key in Settings</Link> to start sending real emails.
+              Messages are being generated and logged, but not actually sent. Contact your Reclaim administrator to enable email sending.
             </p>
           </div>
         </div>
