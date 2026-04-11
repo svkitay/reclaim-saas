@@ -35,6 +35,8 @@ export default function Settings() {
   const [error, setError] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
+  const [scraping, setScraping] = useState(false);
+  const [catalogueResult, setCatalogueResult] = useState<{ products_found: number; preview: string } | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -70,7 +72,6 @@ export default function Settings() {
       await api.updateSettings(payload);
       await refreshUser();
       setSaved(true);
-      // If sender email was changed, show a prompt about verification
       const newEmail = payload.sender_email;
       const oldEmail = (user as any)?.sender_email;
       if (newEmail && newEmail !== oldEmail) {
@@ -112,8 +113,33 @@ export default function Settings() {
     }
   };
 
+  const handleScrapeCatalogue = async () => {
+    if (!form.store_website && !(user as any)?.store_website) {
+      toast.error("Please enter your Store Website URL first and save settings.");
+      return;
+    }
+    setScraping(true);
+    setCatalogueResult(null);
+    try {
+      const result = await api.scrapeCatalogue();
+      setCatalogueResult({ products_found: result.products_found, preview: result.preview });
+      await refreshUser();
+      if (result.products_found > 0) {
+        toast.success(`Catalogue updated! Found ${result.products_found} products. Claude will now use these for personalised recommendations.`);
+      } else {
+        toast.error("No products found on your website. The site may use JavaScript rendering. Try adding products manually in the field below.");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Could not scrape catalogue.");
+    } finally {
+      setScraping(false);
+    }
+  };
+
   const senderEmailVerified = (user as any)?.sender_email_verified;
   const senderEmail = (user as any)?.sender_email;
+  const catalogueLastScraped = (user as any)?.catalogue_last_scraped;
+  const catalogueUrl = (user as any)?.catalogue_url;
 
   const Field = ({ label, field, type = "text", placeholder, hint }: {
     label: string; field: keyof SettingsForm; type?: string; placeholder?: string; hint?: string;
@@ -145,7 +171,76 @@ export default function Settings() {
           <Field label="Store Name" field="store_name" placeholder="Ashley Furniture – Downtown" />
           <Field label="Sender Name" field="sender_name" placeholder="Ashley Furniture" hint="Name customers see in their inbox" />
           <Field label="Store Phone" field="store_phone" placeholder="+1 (555) 000-0000" />
-          <Field label="Store Website" field="store_website" placeholder="https://ashleyfurniture.com" />
+          <Field label="Store Website" field="store_website" placeholder="https://ashleyfurniture.com" hint="Used to scrape your product catalogue for AI recommendations" />
+        </div>
+      </div>
+
+      {/* Product Catalogue */}
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 mb-6">
+        <div className="flex items-start justify-between mb-1">
+          <div>
+            <h2 className="text-base font-semibold text-slate-800">Product Catalogue</h2>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Claude uses your catalogue to make specific product recommendations in cross-sell and win-back emails
+            </p>
+          </div>
+          <span className={`text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap ml-4 ${
+            catalogueLastScraped ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"
+          }`}>
+            {catalogueLastScraped ? "✓ Synced" : "Not synced"}
+          </span>
+        </div>
+
+        <div className="mt-4">
+          {catalogueLastScraped && (
+            <p className="text-xs text-slate-400 mb-3">
+              Last synced from <span className="font-medium">{catalogueUrl}</span> on {new Date(catalogueLastScraped).toLocaleDateString()}
+            </p>
+          )}
+
+          <button
+            onClick={handleScrapeCatalogue}
+            disabled={scraping}
+            className="px-4 py-2.5 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-60"
+            style={{ background: scraping ? "#94a3b8" : "#0EA5E9" }}
+          >
+            {scraping ? (
+              <span className="flex items-center gap-2">
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                </svg>
+                Scanning website...
+              </span>
+            ) : (
+              catalogueLastScraped ? "Re-sync Catalogue from Website" : "Sync Catalogue from Website"
+            )}
+          </button>
+
+          <p className="text-xs text-slate-400 mt-2">
+            {catalogueLastScraped
+              ? "Re-sync whenever you add new products to your website."
+              : "Make sure your Store Website is saved above before syncing."}
+          </p>
+
+          {catalogueResult && (
+            <div className={`mt-4 p-4 rounded-lg border text-sm ${
+              catalogueResult.products_found > 0
+                ? "bg-green-50 border-green-200 text-green-800"
+                : "bg-amber-50 border-amber-200 text-amber-800"
+            }`}>
+              {catalogueResult.products_found > 0 ? (
+                <>
+                  <p className="font-medium mb-2">Found {catalogueResult.products_found} products</p>
+                  <pre className="text-xs whitespace-pre-wrap font-mono opacity-80 max-h-32 overflow-y-auto">
+                    {catalogueResult.preview}
+                  </pre>
+                </>
+              ) : (
+                <p>No products could be extracted automatically. Your website may use JavaScript rendering. Contact support for help with manual catalogue setup.</p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -179,7 +274,6 @@ export default function Settings() {
           />
         </div>
 
-        {/* Verification instructions — shown when email is set but not yet verified */}
         {senderEmail && !senderEmailVerified && (
           <div className="mt-4 p-4 rounded-lg bg-amber-50 border border-amber-200">
             <p className="text-sm font-medium text-amber-800 mb-1">Verification required</p>
@@ -206,7 +300,6 @@ export default function Settings() {
           </div>
         )}
 
-        {/* Verified state */}
         {senderEmail && senderEmailVerified && (
           <div className="mt-4 p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">
             Your customers' emails are being sent from <strong>{senderEmail}</strong>.
@@ -214,7 +307,6 @@ export default function Settings() {
           </div>
         )}
 
-        {/* No email set yet */}
         {!senderEmail && (
           <div className="mt-4 p-3 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-600">
             Until you set and verify a sender email, your customers' emails will be sent from the

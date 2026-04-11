@@ -84,6 +84,16 @@ The {store_name} Team"""
     },
 }
 
+# Touchpoint-specific instructions for Claude
+TOUCHPOINT_INSTRUCTIONS = {
+    1: "Write a warm thank-you email. Ask for a review. Keep it brief and genuine. Do NOT recommend other products yet.",
+    2: "Write a helpful care & maintenance tips email specific to the type of furniture they purchased. Give 3-4 practical tips. Do NOT push a sale.",
+    3: "Write a cross-sell email recommending 2-3 complementary products from the catalogue below that would pair well with what they bought. Be specific — name the actual products. Frame it as a helpful suggestion, not a hard sell.",
+    4: "Write a 'complete the room' email. Reference the item they bought and suggest 2-3 specific pieces from the catalogue that would complete the space. Be warm and design-focused.",
+    5: "Write a 1-year purchase anniversary email. Celebrate the milestone, thank them for their loyalty, and mention 1-2 new arrivals from the catalogue they might love. Offer something special (e.g. priority service, a discount on their next visit).",
+    6: "Write a win-back email. It's been 18 months since their purchase. Acknowledge the time, mention exciting new arrivals from the catalogue, and give them a compelling reason to come back. Be warm, not pushy.",
+}
+
 
 def generate_message(
     customer: models.Customer,
@@ -100,12 +110,14 @@ def generate_message(
     # Use retailer's own key first, fall back to platform key
     api_key = retailer.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY", "")
     store_name = retailer.sender_name or retailer.store_name
+    catalogue_text = retailer.catalogue_text or ""
 
     if api_key:
         return _generate_with_claude(
             api_key=api_key,
             customer=customer,
             store_name=store_name,
+            catalogue_text=catalogue_text,
             touchpoint_number=touchpoint_number,
             touchpoint_name=touchpoint_name,
             channel=channel,
@@ -123,6 +135,7 @@ def _generate_with_claude(
     api_key: str,
     customer: models.Customer,
     store_name: str,
+    catalogue_text: str,
     touchpoint_number: int,
     touchpoint_name: str,
     channel: str,
@@ -138,26 +151,52 @@ def _generate_with_claude(
             else "Write an email with a subject line and body."
         )
 
-        email_format_note = "Format your response as: SUBJECT: [subject line]\nBODY: [email body]" if channel == "email" else "Just write the SMS message text, nothing else."
-        amount_str = f"${customer.purchase_amount:,.2f}" if customer.purchase_amount else "N/A"
-        prompt = f"""You are writing a post-purchase follow-up message for a furniture retailer called "{store_name}".
+        email_format_note = (
+            "Format your response EXACTLY as:\nSUBJECT: [subject line]\nBODY: [email body]"
+            if channel == "email"
+            else "Just write the SMS message text, nothing else."
+        )
+
+        amount_str = f"${customer.purchase_amount:,.2f}" if customer.purchase_amount else "not recorded"
+
+        # Touchpoint-specific instruction
+        tp_instruction = TOUCHPOINT_INSTRUCTIONS.get(
+            touchpoint_number,
+            f"Write a relevant follow-up email for touchpoint {touchpoint_number}: {touchpoint_name}."
+        )
+
+        # Include catalogue only for touchpoints where recommendations make sense (3, 4, 5, 6)
+        catalogue_section = ""
+        if catalogue_text and touchpoint_number in [3, 4, 5, 6]:
+            catalogue_section = f"""
+Store product catalogue (use these to make specific recommendations):
+{catalogue_text[:2000]}
+"""
+
+        prompt = f"""You are writing a post-purchase follow-up {channel} for a furniture retailer called "{store_name}".
 
 Customer details:
 - Name: {customer.name}
 - Item purchased: {customer.item_purchased}
 - Purchase amount: {amount_str}
 
-Touchpoint: {touchpoint_name} (#{touchpoint_number} in the sequence)
-
+Touchpoint #{touchpoint_number}: {touchpoint_name}
+Task: {tp_instruction}
+{catalogue_section}
 {channel_instruction}
 
-Tone: warm, helpful, human, and personal. Reference the customer's name and specific item. Never sound like a mass blast. Be genuine and conversational.
+Rules:
+- Always address the customer by their first name
+- Always reference their specific item purchased
+- Sound warm, human, and personal — never like a mass marketing blast
+- Keep emails under 200 words
+- Sign off as "The {store_name} Team"
 
 {email_format_note}"""
 
         message = client.messages.create(
             model="claude-3-haiku-20240307",
-            max_tokens=600,
+            max_tokens=700,
             messages=[{"role": "user", "content": prompt}]
         )
 

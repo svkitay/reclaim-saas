@@ -16,6 +16,8 @@ interface User {
   has_anthropic: boolean;
   customer_count: number;
   emails_sent: number;
+  catalogue_url?: string;
+  catalogue_last_scraped?: string;
 }
 
 interface AuthContextType {

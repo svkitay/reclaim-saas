@@ -60,6 +60,8 @@ export const api = {
     request("/settings/confirm-sender-verified", { method: "POST" }),
   resendSenderVerification: () =>
     request("/settings/verify-sender", { method: "POST" }),
+  scrapeCatalogue: () =>
+    request("/settings/scrape-catalogue", { method: "POST" }),
 
   // Customers
   getCustomers: () => request("/customers"),

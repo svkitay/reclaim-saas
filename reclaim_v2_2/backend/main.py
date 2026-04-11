@@ -132,6 +132,8 @@ def get_me(current: models.Retailer = Depends(auth.get_current_retailer), db: Se
         created_at=current.created_at,
         customer_count=customer_count,
         emails_sent=emails_sent,
+        catalogue_url=current.catalogue_url,
+        catalogue_last_scraped=current.catalogue_last_scraped,
     )
 
 
@@ -279,6 +281,39 @@ def confirm_sender_verified(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ─── CATALOGUE SCRAPING ────────────────────────────────────────────────────────
+
+@app.post("/api/settings/scrape-catalogue")
+def scrape_retailer_catalogue(
+    current: models.Retailer = Depends(auth.get_current_retailer),
+    db: Session = Depends(get_db),
+):
+    """
+    Scrape the retailer's website to extract their product catalogue.
+    Stores the result in catalogue_text for use in AI prompts.
+    """
+    from catalogue_scraper import scrape_catalogue_safe
+    url = current.catalogue_url or current.store_website
+    if not url:
+        raise HTTPException(status_code=400, detail="No website URL configured. Please add your store website in Settings first.")
+    catalogue_text, error = scrape_catalogue_safe(url)
+    if error and not catalogue_text:
+        raise HTTPException(status_code=422, detail=f"Could not scrape catalogue: {error}")
+    current.catalogue_text = catalogue_text
+    current.catalogue_url = url
+    current.catalogue_last_scraped = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(current)
+    product_count = len([l for l in catalogue_text.split("\n") if l.startswith("-")])
+    return {
+        "success": True,
+        "products_found": product_count,
+        "catalogue_url": url,
+        "last_scraped": current.catalogue_last_scraped,
+        "preview": catalogue_text[:500] if catalogue_text else "",
+    }
+
+
 # ─── CUSTOMERS ────────────────────────────────────────────────────────────────
 
 def enrich_customer(customer: models.Customer) -> schemas.CustomerResponse:
@@ -384,6 +419,17 @@ async def upload_customers(
             skipped += 1
 
     db.commit()
+    # Auto-run campaign engine for newly imported customers (Touchpoint 1 if due)
+    if imported > 0:
+        active_customers = db.query(models.Customer).filter(
+            models.Customer.retailer_id == current.id,
+            models.Customer.campaign_status == models.CampaignStatus.ACTIVE,
+        ).all()
+        for customer in active_customers:
+            try:
+                process_customer_touchpoint(customer, current, db, channel="email")
+            except Exception as e:
+                print(f"Auto-campaign error for customer {customer.id}: {e}")
     return {"imported": imported, "skipped": skipped, "errors": errors[:10]}
 
 
@@ -416,6 +462,12 @@ def add_customer(
     )
     db.add(customer)
     db.commit()
+    db.refresh(customer)
+    # Auto-run campaign engine for the new customer (sends Touchpoint 1 if due)
+    try:
+        process_customer_touchpoint(customer, current, db, channel="email")
+    except Exception as e:
+        print(f"Auto-campaign error for new customer {customer.id}: {e}")
     db.refresh(customer)
     return enrich_customer(customer)
 

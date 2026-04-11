@@ -52,6 +52,8 @@ class RetailerProfile(BaseModel):
     created_at: datetime
     customer_count: Optional[int] = 0
     emails_sent: Optional[int] = 0
+    catalogue_url: Optional[str] = None
+    catalogue_last_scraped: Optional[datetime] = None
 
     class Config:
         from_attributes = True

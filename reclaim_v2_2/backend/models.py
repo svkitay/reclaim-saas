@@ -53,6 +53,11 @@ class Retailer(Base):
     # AI integration
     anthropic_api_key = Column(String(300), nullable=True)
 
+    # Product catalogue (scraped from store website for AI recommendations)
+    catalogue_url = Column(String(500), nullable=True)
+    catalogue_text = Column(Text, nullable=True)
+    catalogue_last_scraped = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
