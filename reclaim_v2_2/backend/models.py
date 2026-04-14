@@ -40,6 +40,7 @@ class Retailer(Base):
     sender_email_verified = Column(Boolean, default=False)  # True once Brevo has verified the sender
     store_logo_url = Column(String(500), nullable=True)
     store_website = Column(String(300), nullable=True)
+    google_reviews_url = Column(String(500), nullable=True)
     store_phone = Column(String(50), nullable=True)
 
     # Email integration (Brevo)

@@ -29,6 +29,7 @@ class RetailerSettings(BaseModel):
     sender_name: Optional[str] = None
     sender_email: Optional[str] = None
     store_website: Optional[str] = None
+    google_reviews_url: Optional[str] = None
     store_phone: Optional[str] = None
     brevo_api_key: Optional[str] = None
     twilio_account_sid: Optional[str] = None
@@ -45,6 +46,7 @@ class RetailerProfile(BaseModel):
     sender_email: Optional[str]
     sender_email_verified: Optional[bool] = False
     store_website: Optional[str]
+    google_reviews_url: Optional[str] = None
     store_phone: Optional[str]
     has_brevo: bool
     has_twilio: bool

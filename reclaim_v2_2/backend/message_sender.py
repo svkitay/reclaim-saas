@@ -31,6 +31,19 @@ def send_email(
             "message": "Email logged but not sent (no Brevo API key configured)",
         }
 
+    # Build signature links (website + Google Reviews)
+    website_url = getattr(retailer, 'store_website', None)
+    google_reviews_url = getattr(retailer, 'google_reviews_url', None)
+    sig_parts = []
+    if website_url:
+        sig_parts.append(f'<a href="{website_url}" style="color: #0EA5E9;">Visit our website</a>')
+    if google_reviews_url:
+        sig_parts.append(f'<a href="{google_reviews_url}" style="color: #0EA5E9;">Leave us a Google review ⭐</a>')
+    if sig_parts:
+        signature_links = '<p style="margin-top: 8px;">' + ' &nbsp;|&nbsp; '.join(sig_parts) + '</p>'
+    else:
+        signature_links = ''
+
     # Build branded HTML email
     if not html_content.startswith("<"):
         html_body = html_content.replace("\n\n", "</p><p>").replace("\n", "<br>")
@@ -65,6 +78,7 @@ def send_email(
     </div>
     <div class="footer">
       <p>You're receiving this because you're a valued customer of {from_name}.</p>
+      {signature_links}
       <p style="margin-top: 8px;"><a href="#" style="color: #0EA5E9;">Unsubscribe</a></p>
     </div>
   </div>

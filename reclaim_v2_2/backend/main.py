@@ -67,6 +67,7 @@ def run_migrations():
             ("store_website", "ALTER TABLE retailers ADD COLUMN store_website VARCHAR(300)"),
             ("store_phone", "ALTER TABLE retailers ADD COLUMN store_phone VARCHAR(50)"),
             ("updated_at", "ALTER TABLE retailers ADD COLUMN updated_at DATETIME"),
+            ("google_reviews_url", "ALTER TABLE retailers ADD COLUMN google_reviews_url VARCHAR(500)"),
         ]
         
         for col_name, sql in migrations:
@@ -154,6 +155,7 @@ def get_me(current: models.Retailer = Depends(auth.get_current_retailer), db: Se
         sender_email=current.sender_email,
         sender_email_verified=bool(current.sender_email_verified),
         store_website=current.store_website,
+        google_reviews_url=getattr(current, 'google_reviews_url', None),
         store_phone=current.store_phone,
         has_brevo=bool(current.brevo_api_key or os.getenv("BREVO_API_KEY", "")),
         has_twilio=bool(current.twilio_account_sid or os.getenv("TWILIO_ACCOUNT_SID", "")),
