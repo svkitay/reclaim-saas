@@ -80,15 +80,16 @@ app.post('/api/generate', upload.single('image'), async (req, res) => {
       fileName: req.file.originalname
     });
 
-    // Step 2: Generate lifestyle scene via fal-ai/nano-banana-2
-    const falResult = await fal.subscribe('fal-ai/nano-banana-2', {
+    // Step 2: Generate lifestyle scene via fal-ai/flux/dev/image-to-image
+    const falResult = await fal.subscribe('fal-ai/flux/dev/image-to-image', {
       input: {
         image_url: uploadedUrl,
         prompt: LIFESTYLE_PROMPT,
-        negative_prompt: 'blurry, deformed, cartoon, illustration, watermark, text, logo',
+        strength: 0.85,
         num_inference_steps: 28,
-        guidance_scale: 7.5,
-        strength: 0.75
+        guidance_scale: 3.5,
+        num_images: 1,
+        enable_safety_checker: false
       },
       logs: false
     });
